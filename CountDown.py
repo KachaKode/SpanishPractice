@@ -59,5 +59,6 @@ class CountDown:
                 self.user_input.append(' ')
                 self.last_keypress_time = time.time()  # Update the timestamp of the last keypress
 
-cd = CountDown(10)
-cd.start()
+if __name__ == "__main__":
+    cd = CountDown(10)
+    cd.start()
