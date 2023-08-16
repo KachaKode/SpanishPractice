@@ -1,22 +1,277 @@
+import random
+
+#  This program is intended to help the user practice spanish verb conjugations for different tenses and parts of speech
+
 #  load up the word bank
+f = open('data.txt', 'r',  encoding='utf-8')
+dataContent = f.read()
+firstOpenInd = dataContent.index("{")
+dataContent = dataContent[firstOpenInd:]
+data = eval(dataContent)
 
-tense_choices = []
+#create list of tenses
 chosen_tenses = []
-accents = ["é", "í",  "ú",  "á", "ñ", "ó"]
-#  ask user which tenses they would like to practice (display a lettered list)
 
-#  randomly choose a word, then tense, then part of speech.  Display the english translation then give options:
-#  a) View Spanish Infinitive
-#  b) View English Example
-#  c) View Spanish Example
-#  Type correct conjugation to submit an answer
+correct, trials = 0, 0
+
+
+#function to filter out the practice pairs that are not relevant for the user's chosen tense
+def filterPracticePairs():
+    return [x for x in wordTensePairs2Practice if x['tense'] in chosen_tenses]
+
+#function to, based on whether or not it's time to do a practice round, get
+# the next challenge word and it's associated info
+def getInfo(choice):
+    # this is a regular round, choose challenge word at random
+    if choice % 2 == 0 or len(filteredPractice) == 0:
+        randWord = random.choice(words)
+        randTense = random.choice(chosen_tenses)
+        partsOfSpeech = list(data[randWord][randTense].keys())
+        randPartOfSpeech = random.choice(partsOfSpeech)
+        translation = data[randWord][randTense][randPartOfSpeech]["translation"]
+        answer_raw = data[randWord][randTense][randPartOfSpeech]["conjugation"]
+        answer = removeAccents(answer_raw.lower())
+        reverse_chosen = reverse()
+        return randWord, randTense, randPartOfSpeech,translation, answer, reverse_chosen
+    else:
+        #this is a practice round, choose challenge word from
+        # collection of words that user previously had trouble with
+        practice = random.choice(filteredPractice)
+        wordTensePairs2Practice.remove(practice)
+        filteredPractice.remove(practice)
+        savePracticeFile()
+
+        randWord = practice["word"]
+        randTense = practice["tense"]
+        randPartOfSpeech = practice["partOS"]
+        translation = practice["prompt"]
+        answer = practice["answer"]
+        reverse_chosen = practice["reversal"]
+        return randWord, randTense, randPartOfSpeech,translation, answer, reverse_chosen
+
+#  function to update the 'turns' variable.  This variable keeps
+#  track of whether the current round is a practice round or a regular round
+def updateTurns():
+    global turns
+    if practiceOn:
+        turns += 1
+
+# function to save the collection of words the user had trouble with to a file for long term storage
+def savePracticeFile():
+    f = open("practice.txt", "w")
+    f.write(f"{wordTensePairs2Practice}")
+    f.close()
+
+#function to load the collection of words the user had trouble with into memory
+def loadPracticeFile():
+    try:
+        f = open("practice.txt", 'r')
+        ret = eval(f.read())
+        f.close()
+        return ret
+    except FileNotFoundError:
+        return []
+
+# function to remove the accents in words from the data file so that
+# the user doesn't have to worry about typing them when they anser the challenge questions
+def removeAccents(word):
+    accents = [("é", "e"), ("í", "i"), ("ú", "u"), ("á", "a"), ("ñ", "n"), ("ó", "o")]
+    for acc in accents:
+        word = word.replace(acc[0], acc[1])
+    return word
+
+#  Function to check if the user's submitted answer was right or wrong
+def checkSubmission(submission, answer):
+    # in case they included "yo" or "el" or "ella" etc.  we'll get rid of that because we don't need it
+    submission2 = ""
+    try:
+        firstSpaceInd = submission.index(" ")
+        submission2 = submission[firstSpaceInd:]
+    except:
+        pass
+
+    # check if there is a "/" present in the answer
+    if "/" in answer:
+    # split by / first, then split by spaces.  Then put the first element with the second and third eleement for ans1 and ans2
+        option1, option2 = tuple(answer.split("/"))
+        option1s = option1.split(" ")
+        for stemLen in range(1, len(option1s)):
+            stem = " ".join(option1s[:stemLen])
+            option1 = " ".join(option1s[stemLen:])
+
+            ans1 = f"{stem} {option1}"
+            ans2 = f"{stem} {option2}"
+
+            if submission == ans1.lower() or submission == ans2.lower():
+                return True
+
+    #check if answer contains parenthesees
+    if "(" in answer:
+        parts = answer.split("(")
+        ans1 = parts[0].strip()
+        ans2 = parts[1].replace(")", "")
+        if submission == ans1 or submission == ans2:
+            return True
+    return submission2 == answer or submission == answer.lower()
+
+# get a list of all verbs and tenses
+words = list(data.keys())
+firstWord = words[0]
+tense_choices = list(data[firstWord].keys())
+
+
+
+#  ask user which tenses they would like to practice (display a lettered list)
+print("Which tenses do you want to practice right now? (Input comma separated list of numbers)")
+choiceNum = 1
+for tense in tense_choices:
+    print(f"{choiceNum}.  {tense}")
+    choiceNum += 1
+user_tenses = input("").split(",")
+
+print("Choose Mode:")
+print("a)  English Prompts & Spanish Answers")
+print("b)  Spanish Prompts & English Answers")
+print("c)  Both")
+choice = input("")
+
+# lambda functino that will determine if each round will be asking
+# the user to translate English to Spanish or Spanish to English
+reverse = {"a":lambda: False, "b":lambda: True, "c": lambda: random.choice([True, False])}[choice.lower()]
+
+print("Run with practice?:")
+print("a)  Yes")
+print("b)  No")
+choice = input("")
+
+#determine if user wants to run the system with the practice feature activated
+practiceOn = 'a' == choice.lower() or 'y' == choice.lower() or 'yes' == choice.lower()
+
+#  get a list of the user's desired tenses they want to practice
+for choice in user_tenses:
+    chosen_tenses.append(tense_choices[int(choice) - 1])
+
+#load the practice file and filter out the practice that doesn't correspond to the tenses the user wants to practice
+wordTensePairs2Practice = loadPracticeFile()
+filteredPractice = filterPracticePairs()
+
+#set the turns variable to 0.  This means that the first round will be a regular round
+turns = 0
+
+
+
+#Each iteration of this loop will be a round in which a new challenge word is chosen for the user,
+# either randomly or based on words they struggled with in the past
+while True:
+    # update the round type and get the challenge word and associated info
+    updateTurns()
+    randWord, randTense, randPartOfSpeech,translation, answer, reverse_chosen = getInfo(turns)
+    partsOfSpeech = list(data[randWord][randTense].keys())
+
+    engEx = data[randWord][randTense][randPartOfSpeech]["english example"]
+    spEx = data[randWord][randTense][randPartOfSpeech]["spanish example"]
+
+    #  variable to keep track of how many incorrect attempts the user had this round
+    incorrect = 0
+
+    #each iteration of this loop will be an attempt for the user to
+    # either translate the challenge word correctly or ask the system for clues (or the answer itself)
+    while True:
+        # inform the user of their current score
+        print(f"Score: {  {True: lambda: 0, False: lambda : round(correct*100/trials, 2)}[trials == 0]()  }% of {trials} trials")
+
+        # English to Spanish round
+        if not reverse_chosen:
+            print(f"Please Translate:  {translation}  \n")
+        #Spanish to English round
+        else:
+            print(f"Please Translate:  {answer} \n")
+
+        #Display Menu Choices to User
+        print("Type correct conjugation to submit an answer or choose from below:")
+        print("a) View Spanish Infinitive")
+        print("b) View English Example")
+        print("c) View Spanish Example")
+        print("d) View Tense")
+
+        #interpret the menu choice and respond with the appropriate action
+        submission = input("").lower().strip().replace(")", "")
+        #User wants to view the spanish infinitive
+        if submission == "a":
+            print(f"{randWord}")
+
+        # User wants to view the english example (probably to get more context concerning the tense or part of
+        # speech if it's an English to Spanish round, or to just get the answer because they gave up during a
+        # Spanish to English round)
+        elif submission == "b":
+            print(f"{engEx}")
+
+        # User wants to view the spanish example (probably to get more context concerning the tense or part of
+        #         # speech if it's a Spanish to English round, or to just get the answer because they gave up during a
+        #         # English to Spanish round)
+        elif submission == "c":
+            print(f"{spEx}")
+
+        #  User wants to see the tense of the word
+        elif submission == "d":
+            print(f"{randTense}")
+
+        #  It's currently a spanish to english round and the user's answer needs to be checked.
+        elif not reverse_chosen and checkSubmission(submission, answer): #submission in answer:
+            correct += 1
+            trials += 1
+            print("Correct!!!")
+            print(f"Eng Example: {engEx}")
+            print(f"Sp Example: {spEx}")
+            print("\n")
+            break
+
+        # it's currently an English to Spanish round and the user's answer needs to be checked
+        elif reverse_chosen and checkSubmission(submission, translation): #submission in answer:
+            correct += 1
+            trials += 1
+            print("Correct!!!")
+            print(f"Eng Example: {engEx}")
+            print(f"Sp Example: {spEx}")
+            print("\n")
+
+            break
+        else:
+            # means the user's answer was incorrect
+            trials += 1
+            incorrect += 1
+            print("Incorrect, please try again.")
+
+            #  User hit the max number of times they can get the answer incorrect before the word is added for practice
+            if incorrect == 3:
+                #  now add every part of speech option for that word tense pair to the list for practice and
+                #  then save to the file
+                print("Adding to practice...  continue please")
+                for partOS in partsOfSpeech:
+                    trans = data[randWord][randTense][partOS]["translation"]
+                    ans_raw = data[randWord][randTense][partOS]["conjugation"]
+                    ans = removeAccents(ans_raw.lower())
+                    for _ in range(2):
+                        newPractice = {"prompt":trans, "tense":randTense, "word":randWord,
+                                        "answer":ans,  "partOS":partOS, "reversal":reverse_chosen}
+                        wordTensePairs2Practice.append(newPractice)
+                        filteredPractice.append(newPractice)
+                savePracticeFile()
+
+
+
+
+
 
 #  Let the user know if they were right or wrong and then display the english and spanish examples.
 
 # Repeat
 
 #  Need a way to remember which word/tense/part of speech combinations need more practice.
+#  Need a way to add or view hints/info about a conjugation.
 
+
+# sample of the input data file
 '''
 Format:
 {"ser": {
@@ -81,22 +336,3 @@ Format:
 
 
 '''
-
-
-
-
-
-
-
-
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
-
-
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
